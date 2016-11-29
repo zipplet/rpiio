@@ -7,7 +7,7 @@ No dependencies on external libraries are required - you do not need to compile 
 ## Supported interfaces
 
 * I2C - fully working, my __rpilcd__ library uses it
-  * __rpii2c__ - Non object oriented unit
+  * __rpii2c__ - Object oriented unit
 
 ## Upcoming interfaces
 
