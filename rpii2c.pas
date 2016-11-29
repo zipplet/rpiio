@@ -1,8 +1,5 @@
 { --------------------------------------------------------------------------
   Raspberry Pi I2C library
-  Non object oriented version
-
-  Based on http://forum.lazarus.freepascal.org/index.php?topic=17500.0
 
   Copyright (c) Michael Nixon 2016.
   Distributed under the MIT license, please see the LICENSE file.
@@ -11,7 +8,7 @@ unit rpii2c;
 
 interface
 
-uses baseunix, sysutils;
+uses baseunix, sysutils, classes;
 
 const
   I2C_SLAVE = $703;
@@ -22,151 +19,235 @@ const
   { Old Raspberry Pi models might use this device }
   I2C_DEVPATH_OLD = '/dev/i2c-0';
 
-function i2cInit(var i2chandle: cint; devpath: ansistring; i2caddr: cint): boolean;
-function i2cSetRegister(var i2chandle: cint; reg: byte; val: byte): boolean; inline;
-function i2cGetRegister(var i2chandle: cint; reg: byte; val: byte): boolean; inline;
-function i2cWrite(var i2chandle: cint; val: byte): boolean; inline;
-function i2cRead(var i2chandle: cint; val: byte): boolean; inline;
-function i2cClose(var i2chandle: cint): boolean;
+type
+  trpiI2CHandle = cint;
+
+  trpiI2CDevice = class(tobject)
+    private
+      deviceHandle: trpiI2CHandle;
+      isOpen: boolean;
+    protected
+    public
+      constructor Create;
+      destructor Destroy; override;
+
+      procedure openDevice(devpath: ansistring; address: cint);
+      procedure closeDevice;
+
+      procedure setRegister(register: byte; value: byte);
+      function getRegister(register: byte): byte;
+      procedure writeByte(value: byte);
+      function readByte: byte;
+  end;
 
 implementation
 
 { --------------------------------------------------------------------------
-  Try to initialise the I2C device.
-  <i2chandle> is the device handle to use to talk to the device
+  -------------------------------------------------------------------------- }
+
+{ --------------------------------------------------------------------------
+  Class constructor
+  -------------------------------------------------------------------------- }
+constructor trpiI2CDevice.Create;
+begin
+  inherited Create;
+  self.isOpen := false;
+  self.deviceHandle := 0;
+end;
+
+{ --------------------------------------------------------------------------
+  Class destructor
+  -------------------------------------------------------------------------- }
+destructor trpiI2CDevice.Destroy;
+begin
+  if self.isOpen then begin
+    try
+      self.closeDevice;
+    except
+      { Do nothing, do not throw an exception while trying to shut down! }
+    end;
+  end;
+  inherited Destroy;
+end;
+
+{ --------------------------------------------------------------------------
+  Try to open the I2C device.
   <devpath> is the path to the I2C system device
     - You can use the I2C_DEVPATH constant
-  <i2caddr> is the device address on the I2C bus
-  Returns TRUE on success, FALSE on failure.
+  <address> is the device address on the I2C bus
+  Throws an exception on failure
   -------------------------------------------------------------------------- }
-function i2cInit(var i2chandle: cint; devpath: ansistring; i2caddr: cint): boolean;
+procedure trpiI2CDevice.openDevice(devpath: ansistring; address: cint);
+const
+  funcname = 'trpiI2CDevice.openDevice: ';
 var
   ioOptions: cint;
 begin
-  result := false;
-  i2chandle := 0;
+  if self.isOpen then begin
+    raise exception.create(funcname + 'Device is already open');
+  end;
+
+  self.deviceHandle := 0;
   try
     { Open the device }
-    i2chandle := fpopen(devpath, O_RDWR);
-    if i2chandle < 1 then begin
+    self.deviceHandle := fpopen(devpath, O_RDWR);
+    if self.deviceHandle < 1 then begin
+      raise exception.create(funcname + 'Failed to open I2C device');
+    end;
+    self.isOpen := true;
+
+    { Set IO options for I2C device }
+    if fpioctl(self.deviceHandle, I2C_SLAVE, pointer(address)) <> 0 then begin
+      self.closeDevice;
+      raise exception.create('fpioctl failed');
       exit;
     end;
-    { Set IO options for I2C device }
-    ioOptions := fpioctl(i2chandle, I2C_SLAVE, pointer(i2caddr));
-    if ioOptions = 0 then begin
-        result := true;
-        exit;
-    end else begin
-        fpclose(i2chandle);
-        i2chandle := 0;
-        exit;
-    end;
   except
-    if i2chandle > 0 then begin
-      try
-        fpclose(i2chandle);
-      except
-        { Do nothing }
+    on e: exception do begin
+      if self.deviceHandle > 0 then begin
+        self.closeDevice;
       end;
+      raise exception.create(funcname + 'Unhandled exception: ' + e.message);
+      exit;
     end;
-    i2chandle := 0;
-    exit;
+  end;
+end;
+
+{ --------------------------------------------------------------------------
+  Close an I2C device handle.
+  Raises an exception on failure.
+  -------------------------------------------------------------------------- }
+procedure trpiI2CDevice.closeDevice;
+const
+  funcname = 'trpiI2CDevice.openDevice: ';
+begin
+  if not self.isOpen then begin
+    raise exception.create(funcname + 'I2C device is not open');
+  end;
+  if self.deviceHandle > 0 then begin
+    try
+      fpclose(self.deviceHandle);
+      self.deviceHandle := 0;
+      self.isOpen := false;
+    except
+      self.deviceHandle := 0;
+      self.isOpen := false;
+      raise exception.create(funcname + 'Failed to close I2C device');
+      exit;
+    end;
+  end else begin
+    raise exception.create(funcname + 'Internal error: deviceHandle < 1');
   end;
 end;
 
 { --------------------------------------------------------------------------
   Set a register on the I2C device.
-  <i2chandle> is the device handle to use to talk to the device
-  <reg> is the device register to set
-  <val> is the value to set it to
-  Returns TRUE on success, FALSE on failure.
+  <register> is the device register to set
+  <value> is the value to set it to
+  Throws an exception on failure
   -------------------------------------------------------------------------- }
-function i2cSetRegister(var i2chandle: cint; reg: byte; val: byte): boolean; inline;
+procedure trpiI2CDevice.setRegister(register: byte; value: byte);
+const
+  funcname = 'trpiI2CDevice.setRegister: ';
 var
   buffer: array[0..1] of byte;
 begin
-  buffer[0] := reg;
-  buffer[1] := val;
-  try
-    fpwrite(i2chandle, buffer[0], 2);
-  except
-    result := false;
-    exit;
+  if not self.isOpen then begin
+    raise exception.create(funcname + 'Device is not open');
   end;
-  result := true;
+
+  buffer[0] := register;
+  buffer[1] := value;
+
+  try
+    fpwrite(self.deviceHandle, buffer[0], 2);
+  except
+    on e: exception do begin
+      raise exception.create(funcname + 'Failed to write to the device: ' + e.message);
+    end;
+  end;
 end;
 
 { --------------------------------------------------------------------------
   Get the value of a register from the I2C device.
-  <i2chandle> is the device handle to use to talk to the device
-  <reg> is the device register to read
-  <val> is the value read
-  Returns TRUE on success, FALSE on failure.
+  <register> is the device register to read
+  Returns the byte read from the device.
+  Throws an exception on failure
   -------------------------------------------------------------------------- }
-function i2cGetRegister(var i2chandle: cint; reg: byte; val: byte): boolean; inline;
+function trpiI2CDevice.getRegister(register: byte): byte;
+const
+  funcname = 'trpiI2CDevice.getRegister: ';
+var
+  value: byte;
 begin
-  try
-    fpwrite(i2chandle, reg, 1);
-    fpread(i2chandle, val, 1);
-  except
-    result := false;
-    exit;
+  if not self.isOpen then begin
+    raise exception.create(funcname + 'Device is not open');
   end;
-  result := true;
-end;
 
-{ --------------------------------------------------------------------------
-  Close an I2C device handle.
-  <i2chandle> is the device handle to close
-  Returns TRUE on success, FALSE on failure.
-  -------------------------------------------------------------------------- }
-function i2cClose(var i2chandle: cint): boolean;
-begin
-  result := false;
-  if i2chandle > 0 then begin
-    try
-      fpclose(i2chandle);
-    except
-      i2chandle := 0; 
-      exit;
+
+  try
+    fpwrite(self.deviceHandle, register, 1);
+  except
+    on e: exception do begin
+      raise exception.create(funcname + 'Failed to write to the device: ' + e.message);
     end;
   end;
-  i2chandle := 0;
-  result := true;
+
+  try
+    fpread(self.deviceHandle, value, 1);
+  except
+    on e: exception do begin
+      raise exception.create(funcname + 'Failed to read from the device: ' + e.message);
+    end;
+  end;
+  result := value;
 end;
 
 { --------------------------------------------------------------------------
   Write a byte to the I2C device.
-  <i2chandle> is the device handle to use to talk to the device
-  <val> is the byte to send
-  Returns TRUE on success, FALSE on failure.
+  <value> is the byte to write.
+  Throws an exception on failure
   -------------------------------------------------------------------------- }
-function i2cWrite(var i2chandle: cint; val: byte): boolean; inline;
+procedure trpiI2CDevice.writeByte(value: byte);
+const
+  funcname = 'trpiI2CDevice.writeByte: ';
 begin
-  try
-    fpwrite(i2chandle, val, 1);
-  except
-    result := false;
-    exit;
+  if not self.isOpen then begin
+    raise exception.create(funcname + 'Device is not open');
   end;
-  result := true;
+
+  try
+    fpwrite(self.deviceHandle, value, 1);
+  except
+    on e: exception do begin
+      raise exception.create(funcname + 'Failed to write to the device: ' + e.message);
+    end;
+  end;
 end;
 
 { --------------------------------------------------------------------------
   Read a byte from the I2C device.
-  <i2chandle> is the device handle to use to talk to the device
-  <val> is the value read
-  Returns TRUE on success, FALSE on failure.
+  Returns the byte read.
+  Throws an exception on failure
   -------------------------------------------------------------------------- }
-function i2cRead(var i2chandle: cint; val: byte): boolean; inline;
+function trpiI2CDevice.readByte: byte;
+const
+  funcname = 'trpiI2CDevice.readByte: ';
+var
+  value: byte;
 begin
-  try
-    fpread(i2chandle, val, 1);
-  except
-    result := false;
-    exit;
+  if not self.isOpen then begin
+    raise exception.create(funcname + 'Device is not open');
   end;
-  result := true;
+
+  try
+    fpread(self.deviceHandle, value, 1);
+  except
+    on e: exception do begin
+      raise exception.create(funcname + 'Failed to read from the device: ' + e.message);
+    end;
+  end;
+  result := value;
 end;
 
 end.
