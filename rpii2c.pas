@@ -37,6 +37,7 @@ type
       procedure setRegister(register: byte; value: byte);
       function getRegister(register: byte): byte;
       procedure writeByte(value: byte);
+      procedure writeBytes(bytes: pointer; length: longint);
       function readByte: byte;
   end;
 
@@ -80,8 +81,6 @@ end;
 procedure trpiI2CDevice.openDevice(devpath: ansistring; address: cint);
 const
   funcname = 'trpiI2CDevice.openDevice: ';
-var
-  ioOptions: cint;
 begin
   if self.isOpen then begin
     raise exception.create(funcname + 'Device is already open');
@@ -218,6 +217,29 @@ begin
 
   try
     fpwrite(self.deviceHandle, value, 1);
+  except
+    on e: exception do begin
+      raise exception.create(funcname + 'Failed to write to the device: ' + e.message);
+    end;
+  end;
+end;
+
+{ --------------------------------------------------------------------------
+  Write a stream of bytes to the I2C device.
+  <bytes> is a pointer to the bytes to write.
+  <length> is the number of bytes to write.
+  Throws an exception on failure
+  -------------------------------------------------------------------------- }
+procedure trpiI2CDevice.writeBytes(bytes: pointer; length: longint);
+const
+  funcname = 'trpiI2CDevice.writeBytes: ';
+begin
+  if not self.isOpen then begin
+    raise exception.create(funcname + 'Device is not open');
+  end;
+
+  try
+    fpwrite(self.deviceHandle, bytes^, length);
   except
     on e: exception do begin
       raise exception.create(funcname + 'Failed to write to the device: ' + e.message);
