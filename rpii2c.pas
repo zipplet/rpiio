@@ -10,15 +10,6 @@ interface
 
 uses baseunix, sysutils, classes;
 
-const
-  I2C_SLAVE = $703;
-
-  { Modern Raspberry Pi models should use this device }
-  I2C_DEVPATH = '/dev/i2c-1';
-
-  { Old Raspberry Pi models might use this device }
-  I2C_DEVPATH_OLD = '/dev/i2c-0';
-
 type
   trpiI2CHandle = cint;
 
@@ -27,13 +18,14 @@ type
       deviceHandle: trpiI2CHandle;
       isOpen: boolean;
     protected
+      procedure realOpenDevice(devpath: ansistring; address: cint);
     public
       constructor Create;
       destructor Destroy; override;
 
-      procedure openDevice(devpath: ansistring; address: cint);
       procedure closeDevice;
 
+      procedure openDevice(address: cint);
       procedure setRegister(register: byte; value: byte);
       function getRegister(register: byte): byte;
       procedure writeByte(value: byte);
@@ -42,6 +34,15 @@ type
   end;
 
 implementation
+
+const
+  I2C_SLAVE = $703;
+
+  { Modern Raspberry Pi models should use this device }
+  I2C_DEVPATH = '/dev/i2c-1';
+
+  { Old Raspberry Pi models might use this device }
+  I2C_DEVPATH_OLD = '/dev/i2c-0';
 
 { --------------------------------------------------------------------------
   -------------------------------------------------------------------------- }
@@ -78,9 +79,9 @@ end;
   <address> is the device address on the I2C bus
   Throws an exception on failure
   -------------------------------------------------------------------------- }
-procedure trpiI2CDevice.openDevice(devpath: ansistring; address: cint);
+procedure trpiI2CDevice.realOpenDevice(devpath: ansistring; address: cint);
 const
-  funcname = 'trpiI2CDevice.openDevice: ';
+  funcname = 'trpiI2CDevice.realOpenDevice: ';
 begin
   if self.isOpen then begin
     raise exception.create(funcname + 'Device is already open');
@@ -109,6 +110,22 @@ begin
       raise exception.create(funcname + 'Unhandled exception: ' + e.message);
       exit;
     end;
+  end;
+end;
+
+{ --------------------------------------------------------------------------
+  Try to open the I2C device. Automatically determines the bus ID.
+  <address> is the device address on the I2C bus
+  Throws an exception on failure
+  -------------------------------------------------------------------------- }
+procedure trpiI2CDevice.openDevice(address: cint);
+const
+  funcname = 'trpiI2CDevice.openDevice: ';
+begin
+  if fileexists('/sys/class/i2c-dev/i2c-1') then begin
+    self.realOpenDevice(I2C_DEVPATH, address);
+  end else begin
+    self.realOpenDevice(I2C_DEVPATH_OLD, address);
   end;
 end;
 
