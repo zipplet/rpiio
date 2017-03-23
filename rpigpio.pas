@@ -230,7 +230,7 @@ begin
       clkf^ := $5A000000 or (32 shl 12);
       clkf := pointer(longword(self.clkptr) + RPIGPIO_PWMCLK_CNTL);
       clkf^ := $5A000011;
-      self.clearBit(pin);
+      self.clearPin(pin);
       pwmf := pointer(longword(self.pwmptr) + RPIGPIO_PWM_CONTROL);
       pwmf^ := 0;
       delayNanoseconds(200);
