@@ -23,9 +23,9 @@ const
   // There are 6 control registers, each control the functions of a block
   // of 10 pins.
  
-  RPIGPIO_CLOCK_BASE    = (REG_GPIO + $101);
-  RPIGPIO_GPIO_BASE     = (REG_GPIO + $200);
-  RPIGPIO_GPIO_PWM      = (REG_GPIO + $20C);
+  RPIGPIO_CLOCK_BASE    = (RPIGPIO_BCM2835_REG_START + $101);
+  RPIGPIO_GPIO_BASE     = (RPIGPIO_BCM2835_REG_START + $200);
+  RPIGPIO_GPIO_PWM      = (RPIGPIO_BCM2835_REG_START + $20C);
  
   RPIGPIO_INPUT         = 0;
   RPIGPIO_OUTPUT        = 1;
