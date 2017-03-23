@@ -8,7 +8,7 @@ No dependencies on external libraries are required - you do not need to compile 
 
 * I2C - fully working, my __rpilcd__ library uses it
   * __rpii2c__ - Object oriented unit
-* GPIO raw access - alpha testing
+* GPIO raw access - alpha testing - only working on the Pi 1 and Pi Zero
 
 ## Upcoming interfaces
 

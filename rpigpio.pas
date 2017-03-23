@@ -5,6 +5,8 @@
   Distributed under the MIT license, please see the LICENSE file.
   
   Thanks to Gabor Szollosi for PiGpio which heavily inspired this unit.
+  
+  TODO: This will not work on the Pi 2 or Pi 3.
   -------------------------------------------------------------------------- }
 unit rpigpio;
 
@@ -85,10 +87,10 @@ const
         procedure shutdown;
 
         procedure setPinMode(pin, mode: byte);
-        function getBit(pin: byte): boolean; inline;
-        procedure clearBit(pin: byte); inline;
-        procedure setBit(pin: byte); inline;
-        procedure setPullMode(pin, mode: byte);
+        function readPin(pin: byte): boolean; inline;
+        procedure clearPin(pin: byte); inline;
+        procedure setPin(pin: byte); inline;
+        procedure setPullupMode(pin, mode: byte);
         procedure PWMWrite(pin: byte; value: longword); inline;
     end;
 
@@ -253,7 +255,7 @@ end;
 { ---------------------------------------------------------------------------
   Read the state of <pin>. Returns true if it is high, false if it is low.
   --------------------------------------------------------------------------- }
-function trpiGPIO.getBit(pin: byte): boolean; inline;
+function trpiGPIO.readPin(pin: byte): boolean; inline;
 var
   gpiof: ^longword;
 begin
@@ -268,7 +270,7 @@ end;
 { ---------------------------------------------------------------------------
   Set the state of <pin> to cleared (low).
   --------------------------------------------------------------------------- }
-procedure trpiGPIO.clearBit(pin: byte); inline;
+procedure trpiGPIO.clearPin(pin: byte); inline;
 var
   gpiof : ^longword;
 begin
@@ -279,7 +281,7 @@ end;
 { ---------------------------------------------------------------------------
   Set the state of <pin> to set (high).
   --------------------------------------------------------------------------- }
-procedure trpiGPIO.setBit(pin: byte); inline;
+procedure trpiGPIO.setPin(pin: byte); inline;
 var
   gpiof: ^longword;
 begin
@@ -294,7 +296,7 @@ end;
   RPIGPIO_PUD_DOWN - weak pulldown
   RPIGPIO_PUD_UP   - weak pullup
   --------------------------------------------------------------------------- }
-procedure trpiGPIO.setPullMode(pin, mode: byte);
+procedure trpiGPIO.setPullupMode(pin, mode: byte);
 var
   pudf, pudclkf: ^longword;
 begin
