@@ -8,12 +8,11 @@ No dependencies on external libraries are required - you do not need to compile 
 
 * I2C - fully working, my __rpilcd__ library uses it
   * __rpii2c__ - Object oriented unit
+* GPIO raw access - alpha testing
 
 ## Upcoming interfaces
 
 * SPI
-* GPIO raw access
-  * __NOT__ by opening files (slow)!
 * Some models: Power LED control
 * Most/all models: Activity LED control
 

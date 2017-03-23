@@ -1,7 +1,7 @@
 { --------------------------------------------------------------------------
-  Raspberry Pi I2C library
+  Raspberry Pi IO library - I2C
 
-  Copyright (c) Michael Nixon 2016.
+  Copyright (c) Michael Nixon 2016 - 2017.
   Distributed under the MIT license, please see the LICENSE file.
   -------------------------------------------------------------------------- }
 unit rpii2c;
