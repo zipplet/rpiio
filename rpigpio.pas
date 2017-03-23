@@ -65,7 +65,7 @@ const
   RPIGPIO_PWM0_ENABLE           = $0001;  // Channel Enable
   
   type
-    trpiGPIO = class
+    trpiGPIO = class(tobject)
       private
       protected
         { GPIO file fd }
@@ -90,10 +90,9 @@ const
         procedure setBit(pin: byte); inline;
         procedure setPullMode(pin, mode: byte);
         procedure PWMWrite(pin: byte; value: longword); inline;
-      end;
+    end;
 
-var
-  procedure delayNanoseconds(delaytime: longword);
+procedure delayNanoseconds(delaytime: longword);
 
 implementation
 
