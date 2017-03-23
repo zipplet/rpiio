@@ -142,19 +142,19 @@ begin
     account is a member of the gpio group }
   result := false;
   self.gpiofd := fpopen('/dev/gpiomem', O_RDWR or O_SYNC);
-  if self.gpiofd < 0 then begin begin
+  if self.gpiofd < 0 then begin
     exit;
   end;
 
-  gpioptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED. self.gpiofd, GPIO_BASE);
+  gpioptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, RPIGPIO_GPIO_BASE);
   if not assigned(gpioptr) then begin
     exit;
   end;
-  clkptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED. self.gpiofd, CLOCK_BASE);
+  clkptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, RPIGPIO_CLOCK_BASE);
   if not assigned(clkptr) then begin
     exit;
   end;
-  pwmptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED. self.gpiofd, GPIO_PWM);
+  pwmptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, RPIGPIO_GPIO_PWM);
   if not assigned(pwmptr) then begin
     exit;
   end;
@@ -172,44 +172,42 @@ begin
     exit;
   end;
   if assigned(self.gpioptr) then begin
-    fpmunmap(self.gpioptr, PAGE_SIZE);
+    fpmunmap(self.gpioptr, RPIGPIO_FPMAP_PAGE_SIZE);
     self.gpioptr := nil;
   end;
   if assigned(self.clkptr) then begin
-    fpmunmap(self.clkptr, PAGE_SIZE);
+    fpmunmap(self.clkptr, RPIGPIO_FPMAP_PAGE_SIZE);
     self.clkptr := nil;
   end;
   if assigned(self.pwmptr) then begin
-    fpmunmap(self.pwmptr, PAGE_SIZE);
+    fpmunmap(self.pwmptr, RPIGPIO_FPMAP_PAGE_SIZE);
     self.pwmptr := nil;
   end;
   self.initialised := false;
 end;
 
-end;
-
 { ---------------------------------------------------------------------------
   Set pin mode.
   <mode> can be one of:
-    INPUT
-    OUTPUT
-    PWM_OUTPUT
+    RPIGPIO_INPUT
+    RPIGPIO_OUTPUT
+    RPIGPIO_PWM_OUTPUT
   --------------------------------------------------------------------------- }
 procedure trpiGPIO.setPinMode(pin, mode: byte);
 var
   fsel, shift, alt: byte;
   gpiof, clkf, pwmf: ^longword;
 begin
-  fsel := (gpin div 10) * 4;
-  shift := (gpin mod 10) * 3;
+  fsel := (pin div 10) * 4;
+  shift := (pin mod 10) * 3;
   gpiof := pointer(longword(self.gpioptr) + fsel);
-  if (mode = INPUT) then begin
+  if (mode = RPIGPIO_INPUT) then begin
     gpiof^ := gpiof^ and ($FFFFFFFF - (7 shl shift));
-  end else if (mode = OUTPUT) then begin
+  end else if (mode = RPIGPIO_OUTPUT) then begin
     gpiof^ := gpiof^ and ($FFFFFFFF - (7 shl shift)) or (1 shl shift);
-  end else if (mode = PWM_OUTPUT) then begin
+  end else if (mode = RPIGPIO_PWM_OUTPUT) then begin
     { Take care of the correct alternate pin mode }
-    case gpin of
+    case pin of
       12,13,40,41,45 : begin
         alt := 4;
       end;
@@ -223,31 +221,31 @@ begin
     end;
     If alt > 0 then begin
       gpiof^ := gpiof^ and ($FFFFFFFF - (7 shl shift)) or (alt shl shift);
-      clkf := pointer(longword(self.clkptr) + PWMCLK_CNTL);
+      clkf := pointer(longword(self.clkptr) + RPIGPIO_PWMCLK_CNTL);
       clkf^ := $5A000011 or (1 shl 5);
       delayNanoseconds(200);
-      clkf := pointer(longword(self.clkptr) + PWMCLK_DIV);
+      clkf := pointer(longword(self.clkptr) + RPIGPIO_PWMCLK_DIV);
       clkf^ := $5A000000 or (32 shl 12);
-      clkf := pointer(longword(self.clkptr) + PWMCLK_CNTL);
+      clkf := pointer(longword(self.clkptr) + RPIGPIO_PWMCLK_CNTL);
       clkf^ := $5A000011;
       self.clearBit(pin);
-      pwmf := pointer(longword(self.pwmptr) + PWM_CONTROL);
+      pwmf := pointer(longword(self.pwmptr) + RPIGPIO_PWM_CONTROL);
       pwmf^ := 0;
       delayNanoseconds(200);
-      pwmf := pointer(longword(self.pwmptr) + PWM0_RANGE);
+      pwmf := pointer(longword(self.pwmptr) + RPIGPIO_PWM0_RANGE);
       pwmf^ := $400;
       delayNanoseconds(200);
-      pwmf := pointer(longword(self.pwmptr) + PWM1_RANGE);
+      pwmf := pointer(longword(self.pwmptr) + RPIGPIO_PWM1_RANGE);
       pwmf^ := $400;
       delayNanoseconds(200);
 
       { Enable PWMs }
-      pwmf := pointer(longword(self.pwmptr) + PWM0_DATA);
+      pwmf := pointer(longword(self.pwmptr) + RPIGPIO_PWM0_DATA);
       pwmf^ := 0;
-      pwmf := pointer(longWord(self.pwmptr) + PWM1_DATA);
+      pwmf := pointer(longWord(self.pwmptr) + RPIGPIO_PWM1_DATA);
       pwmf^ := 0;
-      pwmf := pointer(longword(self.pwmptr) + PWM_CONTROL);
-      pwmf^ := PWM0_ENABLE or PWM1_ENABLE;
+      pwmf := pointer(longword(self.pwmptr) + RPIGPIO_PWM_CONTROL);
+      pwmf^ := RPIGPIO_PWM0_ENABLE or RPIGPIO_PWM1_ENABLE;
     end;
   end;
 end;
@@ -260,7 +258,7 @@ var
   gpiof: ^longword;
 begin
   gpiof := pointer(longword(self.gpioptr) + 52 + (pin shr 5) shl 2);
-  if (gpiof^ and (1 shl gpin)) = 0 then begin
+  if (gpiof^ and (1 shl pin)) = 0 then begin
     result := false;
   end else begin
     result := true;
@@ -285,7 +283,7 @@ procedure trpiGPIO.setBit(pin: byte); inline;
 var
   gpiof: ^longword;
 begin
-  gpiof := pointer(longword(Self.gpioptr) + 28 + (pin shr 5) shl 2);
+  gpiof := pointer(longword(self.gpioptr) + 28 + (pin shr 5) shl 2);
   gpiof^ := 1 shl pin;
 end;
 
@@ -318,12 +316,12 @@ var
   pwmf : ^longword;
   port : byte;
 begin
-  case gpin of
+  case pin of
       12,18,40    : begin
-        port := PWM0_DATA;
+        port := RPIGPIO_PWM0_DATA;
       end;
       13,19,41,45 : begin
-        port := PWM1_DATA;
+        port := RPIGPIO_PWM1_DATA;
       end;
       else begin
         { Should throw an exception here really }
