@@ -5,8 +5,6 @@
   Distributed under the MIT license, please see the LICENSE file.
   
   Thanks to Gabor Szollosi for PiGpio which heavily inspired this unit.
-  
-  TODO: This will not work on the Pi 2 or Pi 3.
   -------------------------------------------------------------------------- }
 unit rpigpio;
 
@@ -17,41 +15,33 @@ uses sysutils, classes;
 const
   { fpmap uses page offsets, each page is 4KB. BCM2385 GPIO register map starts at $20000000,
     but we want to use the page offset here }
-  RPIGPIO_FPMAP_PAGE_SIZE   = $1000;
-  RPIGPIO_BCM2835_REG_START = $20000;   { Actually $20000000 but page offsets... }
+  RPIGPIO_FPMAP_PAGE_SIZE       = $1000;
+  RPIGPIO_PI1_REG_START         = $20000;   { Actually $20000000 but page offsets... }
+  RPIGPIO_PI2_REG_START         = $3F000;   { Actually $3F000000 but page offsets... }
   
-  // The BCM2835 has 54 GPIO pins.
-  // BCM2835 data sheet, Page 90 onwards.
-  // There are 6 control registers, each control the functions of a block
-  // of 10 pins.
- 
-  RPIGPIO_CLOCK_BASE    = (RPIGPIO_BCM2835_REG_START + $101);
-  RPIGPIO_GPIO_BASE     = (RPIGPIO_BCM2835_REG_START + $200);
-  RPIGPIO_GPIO_PWM      = (RPIGPIO_BCM2835_REG_START + $20C);
- 
-  RPIGPIO_INPUT         = 0;
-  RPIGPIO_OUTPUT        = 1;
-  RPIGPIO_PWM_OUTPUT    = 2;
-  RPIGPIO_LOW           = false;
-  RPIGPIO_HIGH          = true;
-  RPIGPIO_PUD_OFF       = 0;
-  RPIGPIO_PUD_DOWN      = 1;
-  RPIGPIO_PUD_UP        = 2;
+  RPIGPIO_INPUT                 = 0;
+  RPIGPIO_OUTPUT                = 1;
+  RPIGPIO_PWM_OUTPUT            = 2;
+  RPIGPIO_LOW                   = false;
+  RPIGPIO_HIGH                  = true;
+  RPIGPIO_PUD_OFF               = 0;
+  RPIGPIO_PUD_DOWN              = 1;
+  RPIGPIO_PUD_UP                = 2;
  
   // PWM
  
-  RPIGPIO_PWM_CONTROL   = 0;
-  RPIGPIO_PWM_STATUS    = 4;
-  RPIGPIO_PWM0_RANGE    = 16;
-  RPIGPIO_PWM0_DATA     = 20;
-  RPIGPIO_PWM1_RANGE    = 32;
-  RPIGPIO_PWM1_DATA     = 36;
+  RPIGPIO_PWM_CONTROL           = 0;
+  RPIGPIO_PWM_STATUS            = 4;
+  RPIGPIO_PWM0_RANGE            = 16;
+  RPIGPIO_PWM0_DATA             = 20;
+  RPIGPIO_PWM1_RANGE            = 32;
+  RPIGPIO_PWM1_DATA             = 36;
  
-  RPIGPIO_PWMCLK_CNTL   =	160;
-  RPIGPIO_PWMCLK_DIV    =	164;
+  RPIGPIO_PWMCLK_CNTL           = 160;
+  RPIGPIO_PWMCLK_DIV            = 164;
  
   RPIGPIO_PWM1_MS_MODE          = $8000;  // Run in MS mode
-  RPIGPIO_PWM1_USEFIFO          = $2000; // Data from FIFO
+  RPIGPIO_PWM1_USEFIFO          = $2000;  // Data from FIFO
   RPIGPIO_PWM1_REVPOLAR         = $1000;  // Reverse polarity
   RPIGPIO_PWM1_OFFSTATE         = $0800;  // Ouput Off state
   RPIGPIO_PWM1_REPEATFF         = $0400;  // Repeat last value if FIFO empty
@@ -83,7 +73,7 @@ const
       public
         constructor Create;
         destructor Destroy; override;
-        function initialise: boolean;
+        function initialise(newPi: boolean): boolean;
         procedure shutdown;
 
         procedure setPinMode(pin, mode: byte);
@@ -132,9 +122,12 @@ end;
 
 { ---------------------------------------------------------------------------
   Try to initialise the GPIO driver.
+  Pass True to <newPi> for Pi 2 or 3.
   Returns true on success, false on failure.
   --------------------------------------------------------------------------- }
-function trpiGPIO.initialise: boolean;
+function trpiGPIO.initialise(newPi: boolean): boolean;
+var
+  gpio_base, clock_base, gpio_pwm: int64;
 begin
   if self.initialised then begin
     raise exception.create('trpiGPIO.initialise: Already initialised');
@@ -147,16 +140,26 @@ begin
   if self.gpiofd < 0 then begin
     exit;
   end;
+  
+  if newPi then begin
+    clock_base := RPIGPIO_PI2_REG_START + $101;
+    gpio_base := RPIGPIO_PI2_REG_START + $200;
+    gpio_pwm := RPIGPIO_PI2_REG_START + $20C;
+  end else begin
+    clock_base := RPIGPIO_PI1_REG_START + $101;
+    gpio_base := RPIGPIO_PI1_REG_START + $200;
+    gpio_pwm := RPIGPIO_PI1_REG_START + $20C;
+  end;
 
-  gpioptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, RPIGPIO_GPIO_BASE);
+  gpioptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, gpio_base);
   if not assigned(gpioptr) then begin
     exit;
   end;
-  clkptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, RPIGPIO_CLOCK_BASE);
+  clkptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, clock_base);
   if not assigned(clkptr) then begin
     exit;
   end;
-  pwmptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, RPIGPIO_GPIO_PWM);
+  pwmptr := fpmmap(nil, RPIGPIO_FPMAP_PAGE_SIZE, PROT_READ or PROT_WRITE, MAP_SHARED, self.gpiofd, gpio_pwm);
   if not assigned(pwmptr) then begin
     exit;
   end;
@@ -210,10 +213,10 @@ begin
   end else if (mode = RPIGPIO_PWM_OUTPUT) then begin
     { Take care of the correct alternate pin mode }
     case pin of
-      12,13,40,41,45 : begin
+      12, 13, 40, 41, 45: begin
         alt := 4;
       end;
-      18,19          : begin
+      18, 19: begin
         alt := 2;
       end;
       else begin
@@ -319,16 +322,16 @@ var
   port : byte;
 begin
   case pin of
-      12,18,40    : begin
-        port := RPIGPIO_PWM0_DATA;
-      end;
-      13,19,41,45 : begin
-        port := RPIGPIO_PWM1_DATA;
-      end;
-      else begin
-        { Should throw an exception here really }
-        exit;
-      end;
+    12, 18, 40: begin
+      port := RPIGPIO_PWM0_DATA;
+    end;
+    13, 19, 41, 45: begin
+      port := RPIGPIO_PWM1_DATA;
+    end;
+    else begin
+      { Should throw an exception here really }
+      exit;
+    end;
   end;
   pwmf := pointer(longword(self.pwmptr) + port);
   pwmf^ := value and $FFFFFBFF; // $400 complemens
