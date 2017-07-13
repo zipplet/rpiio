@@ -6,10 +6,12 @@ No dependencies on external libraries are required - you do not need to compile 
 
 ## Supported interfaces
 
-* I2C - fully working, my __rpilcd__ library uses it
+* I2C
   * __rpii2c__ - Object oriented unit
-* GPIO raw access
+* GPIO
   * __rpiio__ - Object oriented unit
+  * Fast IO access, not using the virtual filesystem
+  * Full control over pull-up and pull-down for input pins
   * Raspberry Pi Zero, 1, 2 and 3 working
   * Untested on the Pi Zero W and compute module as I do not own them
 
